@@ -8,7 +8,6 @@ pipeline {
           set -e
           if ! command -v php >/dev/null 2>&1; then
             echo "Instalando PHP..."
-            apt-get update
             DEBIAN_FRONTEND=noninteractive apt-get install -y php
           fi
           php -v
