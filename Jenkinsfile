@@ -1,68 +1,30 @@
-pipeline {
-  agent any
-  options { timestamps() }
-  environment {
-    REPO   = 'https://github.com/HernanMonserrat/holamundo'
-    BRANCH = 'main'
-    PORT   = '9000'
-  }
+stage('Diagnóstico de entorno') {
+  options { timeout(time: 60, unit: 'SECONDS') }   // evita cuelgues largos
+  steps {
+    sh '''
+      set -euxo pipefail
+      echo "=== DIAGNOSTICO ==="
+      echo "Usuario: $(whoami || true)"
+      echo "Shell  : $SHELL"
+      echo "OS     : $(uname -a || true)"
+      echo "PATH   : $PATH"
 
-  stages {
-    stage('Diagnóstico de entorno') {
-      steps {
-        sh '''
-          set -e
-          echo "Usuario Jenkins: $(whoami)"
-          echo "PATH: $PATH"
-          command -v php || { echo "ERROR: PHP no está en PATH"; exit 1; }
-          php -v | head -n1
-        '''
-      }
-    }
+      # Dónde está sh y php
+      which sh || true
+      command -v php || true
 
-    stage('Checkout') {
-      steps {
-        git branch: "${BRANCH}", url: "${REPO}"
-      }
-    }
+      # Si estás en macOS con Homebrew, revisa si existe el binario esperado:
+      ls -l /opt/homebrew/bin/php 2>/dev/null || true
+      ls -l /usr/local/bin/php 2>/dev/null || true
 
-    stage('Levantar PHP (persistente)') {
-      steps {
-        sh '''
-          set -e
-          # Evitar conflicto de puerto
-          if command -v lsof >/dev/null 2>&1 && lsof -iTCP:${PORT} -sTCP:LISTEN -Pn >/dev/null 2>&1; then
-            echo "ERROR: El puerto ${PORT} está en uso."
-            lsof -iTCP:${PORT} -sTCP:LISTEN -Pn || true
-            exit 2
-          fi
+      # No uses la forma { ... } que en algunos /bin/sh viejos se porta distinto
+      if ! command -v php >/dev/null 2>&1; then
+        echo "ERROR: PHP no está en PATH. Ajusta Manage Jenkins → System → PATH o instala PHP."
+        exit 1
+      fi
 
-          # Apagar servidor previo
-          pkill -f "php -S 0.0.0.0:${PORT}" || true
-
-          echo "Iniciando servidor en 0.0.0.0:${PORT}…"
-          nohup php -S 0.0.0.0:${PORT} -t . > server.log 2>&1 &
-          sleep 1
-
-          # Smoke test
-          for i in $(seq 1 20); do
-            if curl -sSf "http://localhost:${PORT}/" >/dev/null 2>&1; then
-              echo "OK -> http://localhost:${PORT}/"
-              break
-            fi
-            sleep 0.5
-          done
-
-          echo "Servidor activo. Dejo el job vivo para que navegues."
-          exec tail -f server.log
-        '''
-      }
-    }
-  }
-
-  post {
-    always {
-      archiveArtifacts artifacts: 'server.log', allowEmptyArchive: true
-    }
+      php -v | head -n1
+      echo "=== FIN DIAGNOSTICO ==="
+    '''
   }
 }
