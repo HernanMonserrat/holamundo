@@ -51,7 +51,7 @@ pipeline {
             exit 0
           fi
 
-          # Comprobar puerto libre
+          # Comprobar puerto libre (si lsof existe)
           if command -v lsof >/dev/null 2>&1 && lsof -iTCP:${PORT} -sTCP:LISTEN -Pn >/dev/null 2>&1; then
             echo "ERROR: El puerto ${PORT} ya está en uso."
             lsof -iTCP:${PORT} -sTCP:LISTEN -Pn || true
@@ -76,7 +76,6 @@ pipeline {
       when { expression { params.ACTION == 'start' } }
       steps {
         sh '''
-          # Intento simple para verificar respuesta
           for i in $(seq 1 20); do
             if curl -sS "http://localhost:${PORT}/" >/dev/null 2>&1; then
               echo "Servidor respondiendo en localhost:${PORT}"
@@ -85,7 +84,6 @@ pipeline {
             sleep 0.5
           done
 
-          # Mejor hint de URL accesible en red local
           HOST="localhost"
           if command -v hostname >/dev/null 2>&1; then
             if hostname -I >/dev/null 2>&1; then
@@ -124,8 +122,11 @@ pipeline {
 
   post {
     always {
-      archiveArtifacts artifacts: "php-${PORT}.log", allowEmptyArchive: true
-      echo "Para detener el servidor: vuelve a ejecutar el build con ACTION=stop"
+      script {
+        def p = params.PORT ?: '9000'
+        archiveArtifacts artifacts: "php-${p}.log", allowEmptyArchive: true
+        echo "Para detener el servidor: vuelve a ejecutar el build con ACTION=stop y PORT=${p}"
+      }
     }
   }
 }
